@@ -116,4 +116,22 @@ sudo apt install supervisor
 
 Create config
 ```
-mkdir /etc
+sudo su - myapp
+mkdir logs
+touch logs/gunicorn_supervisor.log
+exit
+sudo cp /vagrant/myapp.conf /etc/supervisor/conf.d/myapp.conf
+sudo supervisorctl reread
+sudo supervisorctl update
+```
+
+```
+sudo apt install nginx
+sudo service nginx start
+sudo cp /vagrant/myapp.nginx.conf /etc/nginx/sites-available/myapp
+ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/
+rm /etc/nginx/sites-enabled/default 
+sudo service nginx restart 
+```
+Browse to http://192.168.33.10 from the host
+

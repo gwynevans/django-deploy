@@ -1,0 +1,195 @@
+##
+# Example Ansible playbook to install Python3, Django, Gunicorn, Nginx & PostgreSQL.
+#
+# It's nothing like best-practice, but it should help getting most of the way towards
+# a functioning server.
+#
+---
+# Install packages  
+- hosts: all
+  become: yes
+  become_user: root
+    
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+
+  tasks:
+  - name: Run the equivalent of "apt-get update" as a separate step
+    apt:
+      update_cache: yes
+
+  - name: Install various packages
+    apt:
+      name: 
+      - python3
+      - virtualenv
+      - postgresql 
+      - postgresql-contrib
+      - supervisor
+      - nginx
+
+  - name: Install postgres packages needed for the Ansible PostgreSQL modules
+    apt:
+      name: 
+      - libpq-dev
+      - python-psycopg2 # Need this version despite running python3
+
+  - name: Create webapps folder
+    file:
+      path: /webapps
+      state: directory
+      mode: 0755
+        
+  - name: Create webapp group
+    group:
+      name: webapps
+      system: yes
+
+  - name: Create myapp user
+    user:
+      name: myapp
+      group: webapps
+      home: /webapps/myapp_django
+      shell: /bin/bash
+      system: yes
+      
+#-------------------------------------------------
+# App specific-ish stuff
+
+  - name: Create myapps folder
+    file:
+      path: /webapps/myapp_django/myapp
+      state: directory
+      owner: myapp
+      group: webapps
+      mode: 0755
+        
+  - name: Copy example Django App across
+    unarchive:
+      src: source.d/django-tutorial.tar.gz
+      dest: /webapps/myapp_django/myapp
+      owner: myapp
+
+  - name: Overwrite packaged settings
+    copy:
+      src: source.d/django_settings.py
+      dest: /webapps/myapp_django/myapp/mysite/settings.py
+      owner: myapp
+      group: webapps
+      mode: 0644
+
+#-------------------------------------------------
+# Create PostgresSQL user and DB running as postres user
+- hosts: all
+  become: yes
+  become_user: postgres
+  gather_facts: no
+
+  vars:
+    # https://docs.ansible.com/ansible/become.html#becoming-an-unprivileged-user
+    ansible_ssh_pipelining: true
+    dbname: myapp
+    dbuser: myapp_django
+    dbpassword: myapp_password
+
+  tasks:
+  - name: ensure database is created
+    postgresql_db: name={{dbname}}
+
+  - name: ensure user has access to database
+    postgresql_user: db={{dbname}} name={{dbuser}} password={{dbpassword}} priv=ALL
+
+  - name: ensure user does not have unnecessary privilege
+    postgresql_user: name={{dbuser}} role_attr_flags=NOSUPERUSER,NOCREATEDB
+  
+  - name: ensure no other user can access the database
+    postgresql_privs: db={{dbname}} role=PUBLIC type=database priv=ALL state=absent
+
+#-------------------------------------------------
+# Do various tasks as myapp user
+- hosts: all
+  become: yes
+  become_user: myapp
+  # Pipelining doesn't work with unarchive, so using world-readable tmp files
+
+  tasks:
+  - name: Install requirements into virtualenv
+    pip: 
+      name: 
+        - django
+        - psycopg2
+        - gunicorn
+      virtualenv: /webapps/myapp_django
+      virtualenv_python: python3
+
+  - name: Run migrate on the application
+    django_manage:
+      command: migrate
+      app_path: "/webapps/myapp_django/myapp"
+      virtualenv: "/webapps/myapp_django"
+      
+#-------------------------------------------------
+# Perform these as root again
+- hosts: all
+  become: yes
+  become_user: root
+
+  tasks:
+  - name: Copy gunicorn_start.bash to ~myapp/bin/ (i.e. /webapps/myapp_django/bin/)
+    copy:
+      src: source.d/gunicorn_start.bash
+      dest: /webapps/myapp_django/bin/gunicorn_start
+      owner: myapp
+      group: webapps
+      mode: 0755
+
+  - name: Create supervisor log folder
+    file:
+      path: /webapps/myapp_django/logs
+      state: directory
+      owner: myapp
+      group: webapps
+      mode: 0644
+  
+  - name: Create supervisor log file
+    file:
+      path: /webapps/myapp_django/logs/gunicorn_supervisor.log
+      state: touch
+      owner: myapp
+      group: webapps
+      mode: 0644
+
+  - name: Copy supervisor_myapp.conf to /etc/supervisor/conf.d/myapp.con
+    copy:
+      src: source.d/supervisor_myapp.conf
+      dest: /etc/supervisor/conf.d/myapp.conf
+      mode: 0755
+
+  - name: Start supervisor after config changes
+    service:
+      name: supervisor
+      state: restarted
+
+  - name: Copy nginx_myapp.conf to /etc/nginx/sites-available/myapp.conf
+    copy:
+      src: source.d/nginx_myapp.conf
+      dest: /etc/supervisor/conf.d/myapp.conf
+
+  - name: Link /etc/nginx/sites-available/myapp.conf to sites-enabled/
+    file:
+      src: /etc/supervisor/conf.d/myapp.conf
+      dest: /etc/nginx/sites-enabled/myapp.conf
+      state: link
+      
+  - name: Remove /etc/nginx/sites-enabled/default
+    file:
+      path: /etc/nginx/sites-enabled/default
+      state: absent
+      
+  - name: Restart nginx after config changes
+    service:
+      name: nginx
+      state: restarted
+
+
+

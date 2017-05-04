@@ -52,11 +52,8 @@
       home: /webapps/myapp_django
       shell: /bin/bash
       system: yes
-      
-#-------------------------------------------------
-# App specific-ish stuff
 
-  - name: Create myapps folder
+  - name: Create app folder
     file:
       path: /webapps/myapp_django/myapp
       state: directory
@@ -64,20 +61,14 @@
       group: webapps
       mode: 0755
         
-  - name: Copy example Django App across
-    unarchive:
-      src: source.d/django-tutorial.tar.gz
-      dest: /webapps/myapp_django/myapp
-      owner: myapp
-
-  - name: Overwrite packaged settings
-    copy:
-      src: source.d/django_settings.py
-      dest: /webapps/myapp_django/myapp/mysite/settings.py
+  - name: Create static folder
+    file:
+      path: /webapps/myapp_django/static
+      state: directory
       owner: myapp
       group: webapps
-      mode: 0644
-
+      mode: 0755
+        
 #-------------------------------------------------
 # Create PostgresSQL user and DB running as postres user
 - hosts: all
@@ -122,13 +113,35 @@
       virtualenv: /webapps/myapp_django
       virtualenv_python: python3
 
+  - name: Install example app from git
+    git:
+      repo: https://github.com/gwynevans/django-example.git
+      dest: /webapps/myapp_django/myapp
+      accept_hostkey: yes
+      depth: 1
+      force: yes
+
+  - name: Overwrite packaged settings
+    copy:
+      src: source.d/django_settings.py
+      dest: /webapps/myapp_django/myapp/mysite/settings.py
+      owner: myapp
+      group: webapps
+      mode: 0644
+
   - name: Run migrate on the application
     django_manage:
       command: migrate
       app_path: "/webapps/myapp_django/myapp"
       virtualenv: "/webapps/myapp_django"
-      
-#-------------------------------------------------
+     
+  - name: Run collectstatic on the application
+    django_manage:
+      command: collectstatic
+      app_path: "/webapps/myapp_django/myapp"
+      virtualenv: "/webapps/myapp_django"
+     
+ #-------------------------------------------------
 # Perform these as root again
 - hosts: all
   become: yes

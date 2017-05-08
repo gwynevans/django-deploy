@@ -6,6 +6,22 @@
 # backwards compatibility). Please don't change it unless you know what
 # you're doing.
 Vagrant.configure("2") do |config|
+  
+  config.vm.provider :aws do |aws, override|
+    aws.access_key_id = ENV['AWS_KEY']
+    aws.secret_access_key = ENV['AWS_SECRET']
+    aws.keypair_name = ENV['AWS_KEYNAME']
+    aws.ami = "ami-fa68fbec"
+    aws.region = "us-east-1"
+    aws.instance_type = "t2.micro"
+    aws.security_groups = ["ssh-in"]
+#    aws.subnet_id = "subnet-6e008136"
+
+    override.vm.box = "dummy"
+    override.ssh.username = "ubuntu"
+    override.ssh.private_key_path = ENV['AWS_KEYPATH']
+  end
+  
   # The most common configuration options are documented and commented below.
   # For a complete reference, please see the online documentation at
   # https://docs.vagrantup.com.

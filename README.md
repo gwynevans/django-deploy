@@ -6,5 +6,6 @@ Beside this branch, master, there are currently the following branches exploring
 * vagrant/manual - where the README explains what to do
 * vagrant/shell - where Vagrant runs the bootstrap.sh script to provision the system 
 * vagrant/ansible - where Vagrant runs Ansible, which runs playbook.yml to provision the system
+* vagrant/aws - where Vagrant runs Ansible, which runs playbook.yml to provision an AWS-hosted VM
 
 May 2017 
